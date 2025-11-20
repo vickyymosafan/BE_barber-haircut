@@ -1,6 +1,7 @@
-import { ErrorFactory } from '@infrastruktur/util';
+import { ErrorFactory, generateNomorInvoice, generateUrlInvoice } from '@infrastruktur/util';
 import { IRepositoriPembayaran } from '../repositori';
 import { IRepositoriBooking } from '@domain/booking/repositori';
+import { IRepositoriInvoice } from '@domain/invoice/repositori';
 import { StatusBooking } from '@domain/booking/entitas/booking.entitas';
 import { ProsesPembayaranDto } from '../dto';
 import { Pembayaran, StatusPembayaran } from '../entitas/pembayaran.entitas';
@@ -20,7 +21,8 @@ export interface HasilPembayaran {
 export class ServicePembayaran {
   constructor(
     private repositoriPembayaran: IRepositoriPembayaran,
-    private repositoriBooking: IRepositoriBooking
+    private repositoriBooking: IRepositoriBooking,
+    private repositoriInvoice: IRepositoriInvoice
   ) {}
 
   /**
@@ -66,9 +68,34 @@ export class ServicePembayaran {
     // 6. Update status booking ke berhasil
     await this.repositoriBooking.perbaruiStatusBooking(dto.bookingId, StatusBooking.BERHASIL);
 
-    // 7. TODO: Trigger pembuatan invoice
-    // Akan diimplementasikan setelah ServiceInvoice dibuat
-    // await serviceInvoice.buatInvoice(dto.bookingId);
+    // 7. Trigger pembuatan invoice
+    // Alasan: Invoice dibuat otomatis setelah pembayaran berhasil
+    try {
+      // Generate nomor invoice unik
+      const nomorInvoice = generateNomorInvoice();
+
+      // Get booking dengan relations untuk ambil harga layanan
+      const bookingWithRelations = await this.repositoriBooking.dapatkanBookingById(dto.bookingId);
+      if (bookingWithRelations) {
+        const layanan = await bookingWithRelations.layanan;
+        const totalHarga = layanan.harga;
+
+        // Generate URL invoice
+        const urlInvoice = generateUrlInvoice(nomorInvoice);
+
+        // Buat invoice
+        await this.repositoriInvoice.buatInvoice({
+          nomorInvoice,
+          bookingId: dto.bookingId,
+          totalHarga,
+          urlInvoice,
+        });
+      }
+    } catch (error) {
+      // Log error tapi jangan fail payment
+      // Alasan: Payment sudah berhasil, invoice bisa dibuat manual jika gagal
+      console.error('Gagal membuat invoice:', error);
+    }
 
     return {
       pembayaran,

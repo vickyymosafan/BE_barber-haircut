@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncErrorWrapper, autentikasiMiddleware, validasiDto } from '@infrastruktur/middleware';
 import { RepositoriPembayaran } from '../repositori';
 import { RepositoriBooking } from '@domain/booking/repositori';
+import { RepositoriInvoice } from '@domain/invoice/repositori';
 import { ServicePembayaran } from '../service';
 import { ControllerPembayaran } from '../controller';
 import { ProsesPembayaranDto } from '../dto';
@@ -17,7 +18,8 @@ export function setupRutePembayaran(): Router {
   // Alasan: Dependency injection pattern untuk testability
   const repositoriPembayaran = new RepositoriPembayaran();
   const repositoriBooking = new RepositoriBooking();
-  const service = new ServicePembayaran(repositoriPembayaran, repositoriBooking);
+  const repositoriInvoice = new RepositoriInvoice();
+  const service = new ServicePembayaran(repositoriPembayaran, repositoriBooking, repositoriInvoice);
   const controller = new ControllerPembayaran(service);
 
   /**
