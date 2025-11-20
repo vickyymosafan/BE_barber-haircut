@@ -14,3 +14,6 @@ export * from './otorisasi.middleware';
 
 // Error Handling
 export * from './error-handler.middleware';
+
+// Validation
+export * from './validation.middleware';
