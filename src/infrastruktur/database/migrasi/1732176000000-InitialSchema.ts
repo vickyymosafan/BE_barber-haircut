@@ -8,6 +8,22 @@ export class InitialSchema1732176000000 implements MigrationInterface {
   name = 'InitialSchema1732176000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Enable UUID extension
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+    // Create enums
+    await queryRunner.query(`
+      CREATE TYPE "pengguna_role_enum" AS ENUM('pelanggan', 'admin')
+    `);
+
+    await queryRunner.query(`
+      CREATE TYPE "booking_status_enum" AS ENUM('menunggu_pembayaran', 'berhasil', 'dibatalkan')
+    `);
+
+    await queryRunner.query(`
+      CREATE TYPE "pembayaran_status_enum" AS ENUM('pending', 'berhasil', 'gagal')
+    `);
+
     // Create pengguna table
     await queryRunner.query(`
       CREATE TABLE "pengguna" (
@@ -18,7 +34,7 @@ export class InitialSchema1732176000000 implements MigrationInterface {
         "email" character varying(255) NOT NULL,
         "nomor_telepon" character varying(20) NOT NULL,
         "password_hash" character varying(255) NOT NULL,
-        "role" character varying NOT NULL DEFAULT 'pelanggan',
+        "role" "pengguna_role_enum" NOT NULL DEFAULT 'pelanggan',
         CONSTRAINT "UQ_pengguna_email" UNIQUE ("email"),
         CONSTRAINT "PK_pengguna" PRIMARY KEY ("id")
       )
@@ -26,16 +42,6 @@ export class InitialSchema1732176000000 implements MigrationInterface {
 
     await queryRunner.query(`
       CREATE INDEX "idx_pengguna_email" ON "pengguna" ("email")
-    `);
-
-    await queryRunner.query(`
-      CREATE TYPE "pengguna_role_enum" AS ENUM('pelanggan', 'admin')
-    `);
-
-    await queryRunner.query(`
-      ALTER TABLE "pengguna" 
-      ALTER COLUMN "role" TYPE "pengguna_role_enum" 
-      USING "role"::"pengguna_role_enum"
     `);
 
     // Create barber table
@@ -64,11 +70,6 @@ export class InitialSchema1732176000000 implements MigrationInterface {
       )
     `);
 
-    // Create booking status enum
-    await queryRunner.query(`
-      CREATE TYPE "booking_status_enum" AS ENUM('menunggu_pembayaran', 'berhasil', 'dibatalkan')
-    `);
-
     // Create booking table
     await queryRunner.query(`
       CREATE TABLE "booking" (
@@ -82,7 +83,10 @@ export class InitialSchema1732176000000 implements MigrationInterface {
         "jam_booking" integer NOT NULL,
         "status" "booking_status_enum" NOT NULL DEFAULT 'menunggu_pembayaran',
         CONSTRAINT "PK_booking" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_booking_slot" UNIQUE ("barber_id", "tanggal_booking", "jam_booking")
+        CONSTRAINT "UQ_booking_slot" UNIQUE ("barber_id", "tanggal_booking", "jam_booking"),
+        CONSTRAINT "FK_booking_pengguna" FOREIGN KEY ("pengguna_id") REFERENCES "pengguna"("id") ON DELETE CASCADE,
+        CONSTRAINT "FK_booking_barber" FOREIGN KEY ("barber_id") REFERENCES "barber"("id") ON DELETE CASCADE,
+        CONSTRAINT "FK_booking_layanan" FOREIGN KEY ("layanan_id") REFERENCES "layanan"("id") ON DELETE CASCADE
       )
     `);
 
@@ -106,33 +110,6 @@ export class InitialSchema1732176000000 implements MigrationInterface {
       CREATE INDEX "idx_booking_status" ON "booking" ("status")
     `);
 
-    // Add foreign keys for booking
-    await queryRunner.query(`
-      ALTER TABLE "booking" 
-      ADD CONSTRAINT "FK_booking_pengguna" 
-      FOREIGN KEY ("pengguna_id") REFERENCES "pengguna"("id") 
-      ON DELETE CASCADE ON UPDATE NO ACTION
-    `);
-
-    await queryRunner.query(`
-      ALTER TABLE "booking" 
-      ADD CONSTRAINT "FK_booking_barber" 
-      FOREIGN KEY ("barber_id") REFERENCES "barber"("id") 
-      ON DELETE CASCADE ON UPDATE NO ACTION
-    `);
-
-    await queryRunner.query(`
-      ALTER TABLE "booking" 
-      ADD CONSTRAINT "FK_booking_layanan" 
-      FOREIGN KEY ("layanan_id") REFERENCES "layanan"("id") 
-      ON DELETE CASCADE ON UPDATE NO ACTION
-    `);
-
-    // Create pembayaran status enum
-    await queryRunner.query(`
-      CREATE TYPE "pembayaran_status_enum" AS ENUM('pending', 'berhasil', 'gagal')
-    `);
-
     // Create pembayaran table
     await queryRunner.query(`
       CREATE TABLE "pembayaran" (
@@ -144,7 +121,8 @@ export class InitialSchema1732176000000 implements MigrationInterface {
         "jumlah" numeric(10,2) NOT NULL,
         "status_pembayaran" "pembayaran_status_enum" NOT NULL DEFAULT 'pending',
         CONSTRAINT "UQ_pembayaran_booking" UNIQUE ("booking_id"),
-        CONSTRAINT "PK_pembayaran" PRIMARY KEY ("id")
+        CONSTRAINT "PK_pembayaran" PRIMARY KEY ("id"),
+        CONSTRAINT "FK_pembayaran_booking" FOREIGN KEY ("booking_id") REFERENCES "booking"("id") ON DELETE CASCADE
       )
     `);
 
@@ -154,14 +132,6 @@ export class InitialSchema1732176000000 implements MigrationInterface {
 
     await queryRunner.query(`
       CREATE INDEX "idx_pembayaran_status" ON "pembayaran" ("status_pembayaran")
-    `);
-
-    // Add foreign key for pembayaran
-    await queryRunner.query(`
-      ALTER TABLE "pembayaran" 
-      ADD CONSTRAINT "FK_pembayaran_booking" 
-      FOREIGN KEY ("booking_id") REFERENCES "booking"("id") 
-      ON DELETE CASCADE ON UPDATE NO ACTION
     `);
 
     // Create invoice table
@@ -176,7 +146,8 @@ export class InitialSchema1732176000000 implements MigrationInterface {
         "url_invoice" text NOT NULL,
         CONSTRAINT "UQ_invoice_nomor" UNIQUE ("nomor_invoice"),
         CONSTRAINT "UQ_invoice_booking" UNIQUE ("booking_id"),
-        CONSTRAINT "PK_invoice" PRIMARY KEY ("id")
+        CONSTRAINT "PK_invoice" PRIMARY KEY ("id"),
+        CONSTRAINT "FK_invoice_booking" FOREIGN KEY ("booking_id") REFERENCES "booking"("id") ON DELETE CASCADE
       )
     `);
 
@@ -187,33 +158,20 @@ export class InitialSchema1732176000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE INDEX "idx_invoice_booking" ON "invoice" ("booking_id")
     `);
-
-    // Add foreign key for invoice
-    await queryRunner.query(`
-      ALTER TABLE "invoice" 
-      ADD CONSTRAINT "FK_invoice_booking" 
-      FOREIGN KEY ("booking_id") REFERENCES "booking"("id") 
-      ON DELETE CASCADE ON UPDATE NO ACTION
-    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop foreign keys
-    await queryRunner.query(`ALTER TABLE "invoice" DROP CONSTRAINT "FK_invoice_booking"`);
-    await queryRunner.query(`ALTER TABLE "pembayaran" DROP CONSTRAINT "FK_pembayaran_booking"`);
-    await queryRunner.query(`ALTER TABLE "booking" DROP CONSTRAINT "FK_booking_layanan"`);
-    await queryRunner.query(`ALTER TABLE "booking" DROP CONSTRAINT "FK_booking_barber"`);
-    await queryRunner.query(`ALTER TABLE "booking" DROP CONSTRAINT "FK_booking_pengguna"`);
+    // Drop tables (foreign keys akan otomatis terhapus)
+    await queryRunner.query(`DROP TABLE IF EXISTS "invoice" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "pembayaran" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "booking" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "layanan" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "barber" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "pengguna" CASCADE`);
 
-    // Drop tables
-    await queryRunner.query(`DROP TABLE "invoice"`);
-    await queryRunner.query(`DROP TABLE "pembayaran"`);
-    await queryRunner.query(`DROP TYPE "pembayaran_status_enum"`);
-    await queryRunner.query(`DROP TABLE "booking"`);
-    await queryRunner.query(`DROP TYPE "booking_status_enum"`);
-    await queryRunner.query(`DROP TABLE "layanan"`);
-    await queryRunner.query(`DROP TABLE "barber"`);
-    await queryRunner.query(`DROP TYPE "pengguna_role_enum"`);
-    await queryRunner.query(`DROP TABLE "pengguna"`);
+    // Drop enums
+    await queryRunner.query(`DROP TYPE IF EXISTS "pembayaran_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "booking_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "pengguna_role_enum"`);
   }
 }

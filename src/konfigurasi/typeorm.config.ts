@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import 'tsconfig-paths/register';
 import { DataSource } from 'typeorm';
 import { config } from './environment';
 
@@ -11,11 +12,10 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: config.database.url,
   entities: [
-    // Entities akan ditambahkan saat domain entities dibuat
-    // Pattern untuk auto-load semua entities
-    'src/domain/**/entitas/*.ts',
+    // Load entities explicitly untuk migration CLI
+    __dirname + '/../domain/**/entitas/*.{ts,js}',
   ],
-  migrations: ['src/infrastruktur/database/migrasi/*.ts'],
+  migrations: [__dirname + '/../infrastruktur/database/migrasi/*.{ts,js}'],
   synchronize: false, // Selalu false untuk production safety
   logging: config.app.nodeEnv === 'development',
   // Migration-specific settings
