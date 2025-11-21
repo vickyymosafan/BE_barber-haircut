@@ -1,8 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-cd backend
-
 # Jalankan type check untuk memastikan tidak ada error TypeScript
 npm run type-check
 
